@@ -29,6 +29,13 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
+  void _showSnackBar(String message, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
+  }
+
   Future<void> _checkIfLoggedIn(context) async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');

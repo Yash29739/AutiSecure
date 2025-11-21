@@ -1,11 +1,17 @@
 import 'dart:async'; // <-- ADDED
 import 'dart:convert';
 import 'dart:io';
-import 'package:autisecure/calls/voice_call.dart';
+import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:pdf/widgets.dart' as pw;
 import 'package:autisecure/services/api_service.dart';
 import 'package:autisecure/login_signup/login_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:badges/badges.dart' as badges;
 import 'package:image_picker/image_picker.dart';
@@ -34,6 +40,7 @@ class _LiveLiveChat2State extends State<LiveChat2>
   bool _isLoading = true;
   bool isChatOpen = false;
   String selectedUser = '';
+  String? otherUserId;
   String? userId;
   String? userRole;
   String? selectedConversationId;
@@ -101,6 +108,459 @@ class _LiveLiveChat2State extends State<LiveChat2>
       _showSnackBar("Real-time connection failed.", isError: true);
     }
   }
+
+  Future<void> downloadUserReport(String otherUserId) async {
+    try {
+      // ---------------- LOAD QUESTIONS ----------------
+      final String questionsJson = await rootBundle.loadString(
+        'assets/questions.json',
+      );
+      final List<dynamic> questions = jsonDecode(questionsJson);
+      debugPrint("📌 Loaded ${questions.length} survey questions");
+
+      // ---------------- API CALL ----------------
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      if (token == null) {
+        debugPrint("❌ ERROR: Token is NULL");
+        return;
+      }
+
+      final response = await http.post(
+        Uri.parse(
+          "https://autisense-backend.onrender.com/api/doctor/user-info",
+        ),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+        body: jsonEncode({"userId": otherUserId}),
+      );
+
+      if (response.statusCode != 200) {
+        debugPrint("❌ API failed with status ${response.statusCode}");
+        return;
+      }
+
+      final data = jsonDecode(response.body);
+      final user = data["user"] ?? {};
+      final survey = data["survey"] ?? {};
+      final video = data["video"] ?? {};
+
+      debugPrint("📌 Parsed User: $user");
+      debugPrint("📌 Parsed Survey: $survey");
+      debugPrint("📌 Parsed Video: $video");
+
+      // ---------------- LOAD FONTS ----------------
+      final roboto = pw.Font.ttf(
+        await rootBundle.load("fonts/Roboto-VariableFont_wdth,wght.ttf"),
+      );
+      final pacifico = pw.Font.ttf(
+        await rootBundle.load("fonts/Pacifico-Regular.ttf"),
+      );
+      final merriweather = pw.Font.ttf(
+        await rootBundle.load("fonts/Merriweather-BoldItalic.ttf"),
+      );
+
+      // ---------------- CREATE PDF ----------------
+      final pdf = pw.Document();
+
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: pw.EdgeInsets.all(32),
+          build:
+              (context) => [
+                // HEADER
+                pw.Center(
+                  child: pw.Text(
+                    "ASD User Report",
+                    style: pw.TextStyle(fontSize: 28, font: pacifico),
+                  ),
+                ),
+                pw.Divider(thickness: 2),
+                pw.SizedBox(height: 20),
+
+                // USER INFO
+                pw.Text(
+                  "User Information",
+                  style: pw.TextStyle(fontSize: 22, font: merriweather),
+                ),
+                pw.SizedBox(height: 10),
+                pw.Bullet(
+                  text: "Name: ${user['name'] ?? 'N/A'}",
+                  style: pw.TextStyle(font: roboto),
+                ),
+                pw.Bullet(
+                  text: "Email: ${user['email'] ?? 'N/A'}",
+                  style: pw.TextStyle(font: roboto),
+                ),
+                pw.Bullet(
+                  text: "Phone: ${user['phone'] ?? 'N/A'}",
+                  style: pw.TextStyle(font: roboto),
+                ),
+                pw.Bullet(
+                  text: "DOB: ${user['dob'] ?? 'N/A'}",
+                  style: pw.TextStyle(font: roboto),
+                ),
+                pw.Bullet(
+                  text: "Address: ${user['address'] ?? 'N/A'}",
+                  style: pw.TextStyle(font: roboto),
+                ),
+                pw.SizedBox(height: 20),
+
+                // ---------------- SURVEY TABLE ----------------
+                pw.Text(
+                  "Survey Results",
+                  style: pw.TextStyle(fontSize: 22, font: merriweather),
+                ),
+                pw.SizedBox(height: 10),
+                if (survey.isEmpty)
+                  pw.Text(
+                    "No survey data available",
+                    style: pw.TextStyle(fontSize: 14, font: roboto),
+                  )
+                else
+                  // SURVEY TABLE
+                  pw.Table(
+                    border: pw.TableBorder.all(color: PdfColors.blueGrey),
+                    children: <pw.TableRow>[
+                      // Header row
+                      pw.TableRow(
+                        decoration: pw.BoxDecoration(color: PdfColors.blue300),
+                        children: [
+                          pw.Padding(
+                            padding: pw.EdgeInsets.all(4),
+                            child: pw.Text(
+                              "Question",
+                              style: pw.TextStyle(
+                                font: merriweather,
+                                color: PdfColors.white,
+                              ),
+                            ),
+                          ),
+                          pw.Padding(
+                            padding: pw.EdgeInsets.all(4),
+                            child: pw.Text(
+                              "Response",
+                              style: pw.TextStyle(
+                                font: merriweather,
+                                color: PdfColors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      // Data rows
+                      ...List<pw.TableRow>.generate(
+                        (survey['responses'] as List<dynamic>).length,
+                        (index) => pw.TableRow(
+                          decoration: pw.BoxDecoration(
+                            color:
+                                index % 2 == 0
+                                    ? PdfColors.blue50
+                                    : PdfColors.blue100,
+                          ),
+                          children: <pw.Widget>[
+                            pw.Padding(
+                              padding: pw.EdgeInsets.all(4),
+                              child: pw.Text(
+                                index < questions.length
+                                    ? questions[index].toString()
+                                    : "Question ${index + 1}",
+                                style: pw.TextStyle(font: roboto, fontSize: 12),
+                              ),
+                            ),
+                            pw.Padding(
+                              padding: pw.EdgeInsets.all(4),
+                              child: pw.Text(
+                                survey['responses'][index].toString(),
+                                style: pw.TextStyle(font: roboto, fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                pw.SizedBox(height: 20),
+
+                // ---------------- VIDEO TABLE ----------------
+                pw.Text(
+                  "Video Analysis",
+                  style: pw.TextStyle(fontSize: 22, font: merriweather),
+                ),
+                pw.SizedBox(height: 10),
+                if (video.isEmpty)
+                  pw.Text(
+                    "No video analysis available",
+                    style: pw.TextStyle(fontSize: 14, font: roboto),
+                  )
+                else
+                  // VIDEO TABLE
+                  pw.Table(
+                    border: pw.TableBorder.all(color: PdfColors.deepOrange),
+                    children: <pw.TableRow>[
+                      pw.TableRow(
+                        decoration: pw.BoxDecoration(
+                          color: PdfColors.deepOrange300,
+                        ),
+                        children: [
+                          pw.Padding(
+                            padding: pw.EdgeInsets.all(4),
+                            child: pw.Text(
+                              "Field",
+                              style: pw.TextStyle(
+                                font: merriweather,
+                                color: PdfColors.white,
+                              ),
+                            ),
+                          ),
+                          pw.Padding(
+                            padding: pw.EdgeInsets.all(4),
+                            child: pw.Text(
+                              "Value",
+                              style: pw.TextStyle(
+                                font: merriweather,
+                                color: PdfColors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      ...[
+                            ["Video URL", video['videoUrl'] ?? 'N/A'],
+                            [
+                              "Final Prediction",
+                              video['final_prediction']?['label'] ?? 'N/A',
+                            ],
+                            [
+                              "Confidence",
+                              video['final_prediction']?['confidence']
+                                      ?.toString() ??
+                                  'N/A',
+                            ],
+                            [
+                              "Likelihood Score",
+                              video['final_prediction']?['likelihood_score']
+                                      ?.toString() ??
+                                  'N/A',
+                            ],
+                            ...((video['detected_traits']
+                                        as Map<String, dynamic>?)
+                                    ?.entries
+                                    .map((e) => [e.key, e.value.toString()]) ??
+                                []),
+                          ]
+                          .map<pw.TableRow>(
+                            (row) => pw.TableRow(
+                              decoration: pw.BoxDecoration(
+                                color:
+                                    ((video['detected_traits']?.keys.toList() ??
+                                                        [])
+                                                    .indexOf(row[0]) %
+                                                2 ==
+                                            0)
+                                        ? PdfColors.deepOrange50
+                                        : PdfColors.deepOrange100,
+                              ),
+                              children: <pw.Widget>[
+                                pw.Padding(
+                                  padding: pw.EdgeInsets.all(4),
+                                  child: pw.Text(
+                                    row[0],
+                                    style: pw.TextStyle(
+                                      font: roboto,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                                pw.Padding(
+                                  padding: pw.EdgeInsets.all(4),
+                                  child: pw.Text(
+                                    row[1],
+                                    style: pw.TextStyle(
+                                      font: roboto,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                          .toList(),
+                    ],
+                  ),
+
+                pw.SizedBox(height: 20),
+                pw.Divider(thickness: 1),
+                pw.Center(
+                  child: pw.Text(
+                    "Generated on ${DateTime.now()}",
+                    style: pw.TextStyle(fontSize: 12, font: roboto),
+                  ),
+                ),
+              ],
+        ),
+      );
+
+      final pdfBytes = await pdf.save();
+      await Printing.layoutPdf(onLayout: (format) async => pdfBytes);
+
+      debugPrint("✅ PDF generated and opened successfully!");
+    } catch (e) {
+      debugPrint("❌ ERROR in downloadUserReport(): $e");
+    }
+  }
+
+  // Future<void> downloadUserReport(String otherUserId) async {
+  //   try {
+  //     debugPrint(
+  //       "📌 STEP 1: Starting downloadUserReport() for userId = $otherUserId",
+  //     );
+
+  //     final prefs = await SharedPreferences.getInstance();
+  //     final token = prefs.getString('token');
+  //     if (token == null) return;
+
+  //     final response = await http.post(
+  //       Uri.parse(
+  //         "https://autisense-backend.onrender.com/api/doctor/user-info",
+  //       ),
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //         "Authorization": "Bearer $token",
+  //       },
+  //       body: jsonEncode({"userId": otherUserId}),
+  //     );
+
+  //     if (response.statusCode != 200) return;
+
+  //     final data = jsonDecode(response.body);
+  //     final user = data["user"] ?? {};
+  //     final survey = data["survey"] ?? {};
+  //     final video = data["video"] ?? {};
+
+  //     final roboto = pw.Font.ttf(
+  //       await rootBundle.load("fonts/Roboto-VariableFont_wdth,wght.ttf"),
+  //     );
+  //     final pacifico = pw.Font.ttf(
+  //       await rootBundle.load("fonts/Pacifico-Regular.ttf"),
+  //     );
+  //     final merriweather = pw.Font.ttf(
+  //       await rootBundle.load("fonts/Merriweather-BoldItalic.ttf"),
+  //     );
+
+  //     final pdf = pw.Document();
+
+  //     pdf.addPage(
+  //       pw.MultiPage(
+  //         pageFormat: PdfPageFormat.a4,
+  //         margin: pw.EdgeInsets.all(32),
+  //         build:
+  //             (context) => [
+  //               // HEADER
+  //               pw.Center(
+  //                 child: pw.Text(
+  //                   "ASD User Report",
+  //                   style: pw.TextStyle(fontSize: 28, font: pacifico),
+  //                 ),
+  //               ),
+  //               pw.Divider(thickness: 2),
+  //               pw.SizedBox(height: 20),
+
+  //               // USER INFO
+  //               pw.Text(
+  //                 "User Information",
+  //                 style: pw.TextStyle(fontSize: 22, font: merriweather),
+  //               ),
+  //               pw.SizedBox(height: 10),
+  //               pw.Bullet(
+  //                 text: "Name: ${user['name'] ?? 'N/A'}",
+  //                 style: pw.TextStyle(font: roboto),
+  //               ),
+  //               pw.Bullet(
+  //                 text: "Email: ${user['email'] ?? 'N/A'}",
+  //                 style: pw.TextStyle(font: roboto),
+  //               ),
+  //               pw.Bullet(
+  //                 text: "Phone: ${user['phone'] ?? 'N/A'}",
+  //                 style: pw.TextStyle(font: roboto),
+  //               ),
+  //               pw.Bullet(
+  //                 text: "DOB: ${user['dob'] ?? 'N/A'}",
+  //                 style: pw.TextStyle(font: roboto),
+  //               ),
+  //               pw.Bullet(
+  //                 text: "Address: ${user['address'] ?? 'N/A'}",
+  //                 style: pw.TextStyle(font: roboto),
+  //               ),
+  //               pw.SizedBox(height: 20),
+
+  //               // SURVEY RESULTS AS TABLE
+  //               pw.Text(
+  //                 "Survey Results",
+  //                 style: pw.TextStyle(fontSize: 22, font: merriweather),
+  //               ),
+  //               pw.SizedBox(height: 10),
+  //               if (survey.isEmpty)
+  //                 pw.Text(
+  //                   "No survey data available",
+  //                   style: pw.TextStyle(fontSize: 14, font: roboto),
+  //                 )
+  //               else
+  //                 pw.Table.fromTextArray(
+  //                   headers: ["Question #", "Response"],
+  //                   data: List<List<String>>.generate(
+  //                     (survey['responses'] as List<dynamic>).length,
+  //                     (index) => [
+  //                       (index + 1).toString(),
+  //                       survey['responses'][index].toString(),
+  //                     ],
+  //                   ),
+  //                   headerStyle: pw.TextStyle(font: merriweather, fontSize: 14),
+  //                   cellStyle: pw.TextStyle(font: roboto, fontSize: 12),
+  //                   cellAlignment: pw.Alignment.centerLeft,
+  //                   headerDecoration: pw.BoxDecoration(
+  //                     color: PdfColors.grey300,
+  //                   ),
+  //                   border: pw.TableBorder.all(color: PdfColors.grey),
+  //                 ),
+  //               pw.SizedBox(height: 20),
+
+  //               // VIDEO ANALYSIS
+  //               pw.Text(
+  //                 "Video Analysis",
+  //                 style: pw.TextStyle(fontSize: 22, font: merriweather),
+  //               ),
+  //               pw.SizedBox(height: 10),
+  //               pw.Text(
+  //                 video == null || video.isEmpty
+  //                     ? "No video analysis available"
+  //                     : jsonEncode(video),
+  //                 style: pw.TextStyle(fontSize: 14, font: roboto),
+  //                 softWrap: true,
+  //               ),
+  //               pw.SizedBox(height: 20),
+
+  //               // FOOTER
+  //               pw.Divider(thickness: 1),
+  //               pw.Center(
+  //                 child: pw.Text(
+  //                   "Generated on ${DateTime.now()}",
+  //                   style: pw.TextStyle(fontSize: 12, font: roboto),
+  //                 ),
+  //               ),
+  //             ],
+  //       ),
+  //     );
+
+  //     final pdfBytes = await pdf.save();
+  //     await Printing.layoutPdf(onLayout: (format) async => pdfBytes);
+  //   } catch (e) {
+  //     debugPrint("❌ ERROR in downloadUserReport(): $e");
+  //   }
+  // }
 
   void _handleIncomingMessage(dynamic data) {
     debugPrint('SOCKET: Message Received: $data');
@@ -317,27 +777,41 @@ class _LiveLiveChat2State extends State<LiveChat2>
       _showSnackBar("User ID not found. Cannot open chat.", isError: true);
       return;
     }
+
     selectedConversationId = conversation["_id"]?.toString();
     if (selectedConversationId == null) {
       _showSnackBar("Conversation ID missing.", isError: true);
       return;
     }
 
+    // Join socket room
     socketService.joinRoom(selectedConversationId!);
 
+    // Extract participants
     final List participants = conversation["participants"] ?? [];
+
     final otherUser = participants.firstWhere(
       (p) => p is Map && p["id"] != userId,
       orElse:
           () =>
               participants.isNotEmpty && participants.first is Map
                   ? participants.first
-                  : {"name": "Unknown"},
+                  : {"name": "Unknown", "id": null},
     );
+
+    // Store name
     selectedUser = otherUser["name"] ?? "Unknown User";
-    _currentPeer = otherUser; // <-- ADDED: Store the peer's info
+
+    // Store the entire peer info
+    _currentPeer = otherUser;
+
+    // ✅ Store the other user's ID
+    otherUserId = otherUser["id"]?.toString();
+
+    debugPrint("OTHER USER ID: $otherUserId");
 
     setState(() => isChatOpen = true);
+
     await _loadMessages();
   }
 
@@ -359,7 +833,7 @@ class _LiveLiveChat2State extends State<LiveChat2>
 
     final tempMessage = {
       "message": text,
-      "sender": {"id": userId, "role": "doctor"},
+      "sender": {"id": userId},
       "senderPic": null,
       "conversationId": selectedConversationId!,
       "createdAt": DateTime.now().toIso8601String(),
@@ -427,51 +901,6 @@ class _LiveLiveChat2State extends State<LiveChat2>
               conversationId: selectedConversationId!,
               isCaller: true,
               isVideoCall: isvideoCall,
-            ),
-      ),
-    );
-  }
-
-  // --- ADDED: Method to start the video call ---
-  Future<void> _startVoiceCall() async {
-    if (selectedConversationId == null ||
-        userId == null ||
-        _currentPeer == null) {
-      _showSnackBar("Cannot start call. Chat not fully loaded.", isError: true);
-      return;
-    }
-
-    final String peerUserId = _currentPeer!['id']?.toString() ?? '';
-    final String peerName = _currentPeer!['name']?.toString() ?? 'Peer';
-    final String selfName = "Doctor"; // Replace later with logged-in name
-
-    if (peerUserId.isEmpty) {
-      _showSnackBar("Cannot start call. Peer ID is missing.", isError: true);
-      return;
-    }
-
-    debugPrint("📞 Initiating VOICE call to $peerName ($peerUserId)");
-
-    // 1. Notify peer to show *incoming voice call screen*
-    socketService.initiateVoiceCall(
-      conversationId: selectedConversationId!,
-      fromUserId: userId!,
-      toUserId: peerUserId,
-      callerName: selfName,
-    );
-
-    // 2. Navigate to YOUR Voice Call screen (you are the caller)
-    if (!mounted) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder:
-            (context) => VoiceCall(
-              socket: socketService.socket!,
-              callerName: peerName,
-              selfUserId: userId!,
-              peerUserId: peerUserId,
-              conversationId: selectedConversationId!,
-              isCaller: true,
             ),
       ),
     );
@@ -1109,6 +1538,17 @@ class _LiveLiveChat2State extends State<LiveChat2>
                   _startVideoCall(isvideoCall: false);
                 },
                 tooltip: "Voice Call",
+              ),
+              IconButton(
+                icon: const Icon(
+                  Icons.file_download_outlined,
+                  color: Colors.white,
+                  size: 24,
+                ),
+                onPressed: () {
+                  downloadUserReport(otherUserId!);
+                },
+                tooltip: "Download Report",
               ),
             ],
           ),

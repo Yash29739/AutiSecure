@@ -66,11 +66,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   // Helper function to safely show a SnackBar
-  void _showSnackBar(String message) {
+  void _showSnackBar(String message, Color color) {
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ).showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
   }
 
   Future<void> _checkIfLoggedIn() async {
@@ -106,13 +106,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
         dob.isEmpty ||
         password.isEmpty ||
         confirmPassword.isEmpty) {
-      _showSnackBar("⚠️ Please fill all required fields.");
+      _showSnackBar("⚠️ Please fill all required fields.", Colors.red);
+      debugPrint("⚠️ Please fill all required fields.");
       return;
     }
 
     // 2️⃣ Password match check
     if (password != confirmPassword) {
-      _showSnackBar("⚠️ Passwords do not match.");
+      _showSnackBar("⚠️ Passwords do not match.", Colors.red);
+      debugPrint("⚠️ Passwords do not match");
       return;
     }
 
@@ -124,19 +126,29 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
     // 4️⃣ Apply Regex
     if (!nameRegex.hasMatch(name)) {
-      _showSnackBar("Enter a valid name (letters, spaces, hyphens only).");
+      _showSnackBar(
+        "Enter a valid name (letters, spaces, hyphens only).",
+        Colors.red,
+      );
+      debugPrint("Enter a valid name (letters, spaces, hyphens only).");
       return;
     }
     if (!emailRegex.hasMatch(email)) {
-      _showSnackBar("Invalid email format.");
+      _showSnackBar("Invalid email format.", Colors.red);
+      debugPrint("Invalid email format.");
       return;
     }
     if (!phoneRegex.hasMatch(phone)) {
-      _showSnackBar("Phone number must be exactly 10 digits.");
+      _showSnackBar("Phone number must be exactly 10 digits.", Colors.red);
+      debugPrint("Phone number must be exactly 10 digits.");
       return;
     }
     if (!passwordRegex.hasMatch(password)) {
       _showSnackBar(
+        "Password must be at least 8 characters long and include one letter and one number.",
+        Colors.red,
+      );
+      debugPrint(
         "Password must be at least 8 characters long and include one letter and one number.",
       );
       return;
@@ -148,7 +160,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
           experience.text.trim().isEmpty ||
           docInfo.text.trim().isEmpty ||
           clinicLoc.text.trim().isEmpty) {
-        _showSnackBar("Please fill all doctor-specific fields.");
+        _showSnackBar("Please fill all doctor-specific fields.", Colors.red);
+        debugPrint("Please fill all doctor-specific fields.");
         return;
       }
     }
@@ -161,7 +174,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
       try {
         imageUrl = await uploadDoctorimage(doctorImage!);
       } catch (e) {
-        _showSnackBar("Image upload failed. Please try again.");
+        _showSnackBar("Image upload failed. Please try again.", Colors.red);
+        debugPrint("Image upload failed. Please try again.");
         return;
       }
     }
@@ -221,7 +235,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
         docInfo.clear();
         clinicLoc.clear();
 
-        _showSnackBar("✅ Registration successful!");
+        _showSnackBar("✅ Registration successful!", Colors.green);
+        debugPrint("✅ Registration successful!");
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -231,10 +246,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
             jsonDecode(response.body)['message'] ??
             response.reasonPhrase ??
             "Unknown error from server 1.";
-        _showSnackBar("❌ Registration failed.\nServer 1: $msg1");
+        _showSnackBar("❌ Registration failed.\nServer 1: $msg1", Colors.red);
+        debugPrint("❌ Registration failed.\nServer 1: $msg1");
       }
     } catch (e) {
-      _showSnackBar("⚠️ A network error occurred: $e");
+      _showSnackBar("⚠️ A network error occurred: $e", Colors.red);
+      debugPrint("⚠️ A network error occurred: $e");
     }
   }
 

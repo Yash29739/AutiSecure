@@ -9,7 +9,9 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_webrtc
   geolocator_windows
   iris_method_channel
+  pdfx
   permission_handler_windows
+  printing
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
