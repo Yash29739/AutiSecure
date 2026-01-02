@@ -4,8 +4,6 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
-import 'package:open_filex/open_filex.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:autisecure/services/api_service.dart';
 import 'package:autisecure/login_signup/login_screen.dart';
@@ -399,66 +397,56 @@ class _LiveLiveChat2State extends State<LiveChat2>
                         ],
                       ),
                       ...[
-                            ["Video URL", video['videoUrl'] ?? 'N/A'],
-                            [
-                              "Final Prediction",
-                              video['final_prediction']?['label'] ?? 'N/A',
-                            ],
-                            [
-                              "Confidence",
-                              video['final_prediction']?['confidence']
-                                      ?.toString() ??
-                                  'N/A',
-                            ],
-                            [
-                              "Likelihood Score",
-                              video['final_prediction']?['likelihood_score']
-                                      ?.toString() ??
-                                  'N/A',
-                            ],
-                            ...((video['detected_traits']
-                                        as Map<String, dynamic>?)
-                                    ?.entries
-                                    .map((e) => [e.key, e.value.toString()]) ??
-                                []),
-                          ]
-                          .map<pw.TableRow>(
-                            (row) => pw.TableRow(
-                              decoration: pw.BoxDecoration(
-                                color:
-                                    ((video['detected_traits']?.keys.toList() ??
-                                                        [])
-                                                    .indexOf(row[0]) %
-                                                2 ==
-                                            0)
-                                        ? PdfColors.deepOrange50
-                                        : PdfColors.deepOrange100,
+                        ["Video URL", video['videoUrl'] ?? 'N/A'],
+                        [
+                          "Final Prediction",
+                          video['final_prediction']?['label'] ?? 'N/A',
+                        ],
+                        [
+                          "Confidence",
+                          video['final_prediction']?['confidence']
+                                  ?.toString() ??
+                              'N/A',
+                        ],
+                        [
+                          "Likelihood Score",
+                          video['final_prediction']?['likelihood_score']
+                                  ?.toString() ??
+                              'N/A',
+                        ],
+                        ...((video['detected_traits'] as Map<String, dynamic>?)
+                                ?.entries
+                                .map((e) => [e.key, e.value.toString()]) ??
+                            []),
+                      ].map<pw.TableRow>(
+                        (row) => pw.TableRow(
+                          decoration: pw.BoxDecoration(
+                            color:
+                                ((video['detected_traits']?.keys.toList() ?? [])
+                                                .indexOf(row[0]) %
+                                            2 ==
+                                        0)
+                                    ? PdfColors.deepOrange50
+                                    : PdfColors.deepOrange100,
+                          ),
+                          children: <pw.Widget>[
+                            pw.Padding(
+                              padding: pw.EdgeInsets.all(4),
+                              child: pw.Text(
+                                row[0],
+                                style: pw.TextStyle(font: roboto, fontSize: 12),
                               ),
-                              children: <pw.Widget>[
-                                pw.Padding(
-                                  padding: pw.EdgeInsets.all(4),
-                                  child: pw.Text(
-                                    row[0],
-                                    style: pw.TextStyle(
-                                      font: roboto,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                                pw.Padding(
-                                  padding: pw.EdgeInsets.all(4),
-                                  child: pw.Text(
-                                    row[1],
-                                    style: pw.TextStyle(
-                                      font: roboto,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ],
                             ),
-                          )
-                          ,
+                            pw.Padding(
+                              padding: pw.EdgeInsets.all(4),
+                              child: pw.Text(
+                                row[1],
+                                style: pw.TextStyle(font: roboto, fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
 
@@ -529,7 +517,7 @@ class _LiveLiveChat2State extends State<LiveChat2>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.orangeAccent,
+        backgroundColor: isError ? Colors.red : Colors.green,
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -593,11 +581,13 @@ class _LiveLiveChat2State extends State<LiveChat2>
       }
     } catch (e) {
       debugPrint("❌ Error loading conversations: $e");
+
       if (cachedDataString == null) {
         if (mounted) {
           debugPrint("Could not load conversations");
         }
       }
+      _showSnackBar("No chats to be loaded");
     }
   }
 
@@ -1513,7 +1503,7 @@ class _LiveLiveChat2State extends State<LiveChat2>
 
                       return Align(
                         alignment:
-                            isMe ? Alignment.centerRight : Alignment.centerLeft,
+                            isMe ? Alignment.centerLeft : Alignment.centerRight,
                         child: Container(
                           constraints: BoxConstraints(
                             maxWidth: MediaQuery.of(context).size.width * 0.75,
@@ -1537,8 +1527,8 @@ class _LiveLiveChat2State extends State<LiveChat2>
                             borderRadius: BorderRadius.only(
                               topLeft: Radius.circular(16),
                               topRight: Radius.circular(16),
-                              bottomLeft: Radius.circular(isMe ? 16 : 0),
-                              bottomRight: Radius.circular(isMe ? 0 : 16),
+                              bottomLeft: Radius.circular(isMe ? 0 : 16),
+                              bottomRight: Radius.circular(isMe ? 16 : 0),
                             ),
                             boxShadow: [
                               BoxShadow(
